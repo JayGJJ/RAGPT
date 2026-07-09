@@ -45,6 +45,7 @@ class Trainer():
         self.optimizer, self.scheduler = get_optim(max_steps=len(self.train_data_loader) * self.epochs, model=self.model, **cfg.optim_para)
         self.evaluator = get_evaluator(self.dataset_name, cfg.device)
         self.early_stopping = EarlyStopping(patience=cfg.patience, path=os.path.join(self.father_folder_name, self.folder_name, 'best_model.pth'))
+        self._forward_warmup_done = False
     def run(self):
         print_init_msg(self.logger, self.cfg)
         for epoch in range(self.epochs):
@@ -66,6 +67,7 @@ class Trainer():
             self.logger.info(f"Final Tesing Accuracy: {best_metrics['accuracy']}")
         elif self.task == 'mmimdb':
             self.logger.info(f"Final Tesing F1_micro: {best_metrics['f1_micro']}")
+            self.logger.info(f"Final Tesing F1_sample: {best_metrics['f1_sample']}")
 
     def _train(self):
         loss_list =  []
@@ -74,6 +76,14 @@ class Trainer():
         for batch in pbar:
             inputs = {key: val.to(self.device) if isinstance(val, torch.Tensor) else val for key, val in batch.items()}
             labels = inputs.pop('label')
+            if not self._forward_warmup_done and str(self.device).startswith('cuda'):
+                warmup_preds = self.model(**inputs)
+                warmup_output = warmup_preds.get('output')
+                if isinstance(warmup_output, torch.Tensor) and not torch.isfinite(warmup_output).all():
+                    self.logger.warning("Discarded non-finite CUDA warmup forward output.")
+                del warmup_preds
+                torch.cuda.synchronize()
+                self._forward_warmup_done = True
             preds = self.model(**inputs)
             loss = compute_loss(labels, self.dataset_name, **preds)
             loss_list.append(loss.item())

@@ -54,7 +54,7 @@ def init_data_mmimdb():
         data.to_pickle(f'dataset/mmimdb/{split if split != "dev" else "valid"}.pkl')
 
 def init_data_food101():
-    class_idx = json.load(open('dataset/food101/class_idx.json'))
+    class_idx = json.load(open('dataset/food101/meta_data/class_idx.json'))
 
     for split in tqdm(['train', 'test']):
         data = pd.read_csv(f'dataset/food101/meta_data/{split}_titles.csv')
@@ -382,12 +382,15 @@ def resize_image(img, size=(384, 384)):
     return img.resize(size, Image.BILINEAR)
 
 def load_model(is_baseline=False, **kargs):
+    vilt_source = kargs.get('vilt_weights', 'dandelin/vilt-b32-mlm')
+    if not os.path.exists(vilt_source):
+        vilt_source = 'dandelin/vilt-b32-mlm'
     if is_baseline:
-        pretrained_vlit = importlib.import_module(f"baselines.{kargs['model_name']}.vilt").ViltModel.from_pretrained('dandelin/vilt-b32-mlm')
+        pretrained_vlit = importlib.import_module(f"baselines.{kargs['model_name']}.vilt").ViltModel.from_pretrained(vilt_source)
         model = importlib.import_module(f"baselines.{kargs['model_name']}.model.{kargs['model_name']}")
         model = getattr(model, kargs['model_name'])
         return model(vilt=pretrained_vlit, **kargs)
-    pretrained_vlit = ViltModel.from_pretrained('dandelin/vilt-b32-mlm')
+    pretrained_vlit = ViltModel.from_pretrained(vilt_source)
     model = Model(vilt=pretrained_vlit, **kargs)
     return model
 
@@ -418,8 +421,11 @@ def get_evaluator(task_id, device):
 
 class Collator:
     def __init__(self, max_text_len, is_baseline=False, **kargs):
-        self.image_processor = ViltImageProcessor.from_pretrained('dandelin/vilt-b32-mlm')
-        self.tokenizer = BertTokenizer.from_pretrained('dandelin/vilt-b32-mlm', do_lower_case=True)
+        vilt_source = kargs.get('vilt_weights', 'dandelin/vilt-b32-mlm')
+        if not os.path.exists(vilt_source):
+            vilt_source = 'dandelin/vilt-b32-mlm'
+        self.image_processor = ViltImageProcessor.from_pretrained(vilt_source)
+        self.tokenizer = BertTokenizer.from_pretrained(vilt_source, do_lower_case=True)
         self.max_text_len = max_text_len
         self.is_baseline = is_baseline
         self.missing_type = kargs['missing_type']
@@ -633,8 +639,8 @@ class HatememesMetric:
 
 class MMIMDbMetric:
     def __init__(self, device):
-        self.f1_micro = F1Score(task="multiclass", average="micro", num_classes=23).to(device)
-        self.f1_sample = F1Score(task="multiclass", average="samples", num_classes=23).to(device)
+        self.f1_micro = F1Score(task="multilabel", average="micro", num_labels=23).to(device)
+        self.f1_sample = F1Score(task="multilabel", average="samples", num_labels=23).to(device)
 
     def _reset(self):
         self.f1_micro.reset()

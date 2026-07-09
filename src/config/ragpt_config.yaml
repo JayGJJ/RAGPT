@@ -6,13 +6,13 @@ model_para:
   backbone: "vilt"
   vilt_weights: "src/model/vilt/weights/mlm"
   prompt_pos: 1
-  prompt_len: 6
+  prompt_len: 2
   dropout_rate: 0.2
 
 
 data_para:
-  dataset_name: "mmimdb" # hatememes, mmimdb, food101
-  missing_type: "both" # "both" "text" "image"
+  dataset_name: "hatememes" # hatememes, mmimdb, food101
+  missing_type: "text" # "both" "text" "image"
   missing_rate: 0.7
   max_text_len: 128
   max_image_len: 145
@@ -34,4 +34,4 @@ batch_size: 64
 num_workers: 16
 patience: 10
 save_path: "checkpoints"
-regenerate_missing_table: True
+regenerate_missing_table: False
